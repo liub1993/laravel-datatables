@@ -8,10 +8,49 @@
 
 ## Change Log
 
-### TODO
-- Fix IE compatibility by using POST method when exporting/printing. #826
-- Enhance/Fix nested relations support. #789
-- Export Selected Rows Datatables Service Provider. #829 #850
+### v7.7.0 - 06-07-2017
+- Add config for setting the default JsonResponse header and options. #1177
+- Allow sorting for blacklisted columns with custom handler. #1192
+- Fix #1034, #1191.
+
+### v7.6.0 - 05-31-2017
+- Fix addColumn search/sort query bug by adding it to blacklist. PR #1158, credits to @liub1993.
+- Add `pushToBlacklist($column)` api. #1158
+- Allow filtering of added column if a custom handler was defined. #1169
+- Add more tests. #1170
+
+### v7.5.2 - 05-26-2017
+- Remove empty arrays returned from array_dot. PR #1161
+- Fix #1160.
+
+### v7.5.1 - 05-26-2017
+- Fix column name added to select when relation is belongsToMany. #1155
+- Fix rawColumns not working on relationships. #1156
+- Fixes #1094, #1151.
+- Add docs for artisan serve bug.
+
+### v7.5.0 - 05-22-2017
+- Do not use ::class to avoid IDE error when fractal is not installed. #1132
+- Add server-side [error handler](https://yajrabox.com/docs/laravel-datatables/7.0/error-handler). #1131
+
+### v7.4.0 - 05-01-2017
+- Implement multi-term smart search in collection engine. #1115
+- Implement multi-term smart search in QueryBuilderEngine. #1113
+- Fix #881, #1109, #998
+- Credits to @apreiml.
+
+### v7.3.0 - 02-23-2017
+- Add support ordering when search in nested relations #965.
+- Credits to @AdrienPoupa and @ethaizone.
+
+### v7.2.1 - 02-16-2017
+- Move orchestra/testbench to require-dev.
+- Use phpunit 5.7 to match Laravel’s requirement.
+- Revert branch alias.
+
+### v7.2.0 - 02-16-2017
+- Add support for array data source. [#992](https://github.com/yajra/laravel-datatables/pull/992)
+- Minor comment correction [#1002](https://github.com/yajra/laravel-datatables/pull/1002), credits to @lk77.
 
 ### v7.1.4 - 02-09-2017
 - Fix collection case insensitive ordering.
@@ -55,3 +94,8 @@
 - Added option to order by nulls last. #794
 - Escape all columns by default for XSS protection. Fix #909
 - Add rawColumns method for unescaped columns. https://github.com/yajra/laravel-datatables/commit/81adef8555195795189853f91e326dd056e40bb0
+
+## TODO
+- Fix IE compatibility by using POST method when exporting/printing. #826
+- Enhance/Fix nested relations support. #789
+- Export Selected Rows Datatables Service Provider. #829 #850

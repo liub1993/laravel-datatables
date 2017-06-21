@@ -2,6 +2,7 @@
 
 namespace Yajra\Datatables\Tests\Integration;
 
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\JsonResponse;
 use Yajra\Datatables\Datatables;
 use Yajra\Datatables\Engines\CollectionEngine;
@@ -11,6 +12,8 @@ use Yajra\Datatables\Tests\TestCase;
 
 class CollectionEngineTest extends TestCase
 {
+    use DatabaseTransactions;
+
     /** @test */
     public function it_returns_all_records_when_no_parameters_is_passed()
     {
@@ -131,6 +134,19 @@ class CollectionEngineTest extends TestCase
     public function it_accepts_a_model_using_ioc_container_factory()
     {
         $dataTable = app('datatables')->of(User::all());
+        $response  = $dataTable->make(true);
+        $this->assertInstanceOf(CollectionEngine::class, $dataTable);
+        $this->assertInstanceOf(JsonResponse::class, $response);
+    }
+
+    /** @test */
+    public function it_accepts_array_data_source()
+    {
+        $source = [
+            ['id' => 1, 'name' => 'foo'],
+            ['id' => 2, 'name' => 'bar'],
+        ];
+        $dataTable = app('datatables')->of($source);
         $response  = $dataTable->make(true);
         $this->assertInstanceOf(CollectionEngine::class, $dataTable);
         $this->assertInstanceOf(JsonResponse::class, $response);

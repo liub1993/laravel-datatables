@@ -2,10 +2,12 @@
 
 namespace Yajra\Datatables\Engines;
 
+use Illuminate\Contracts\Logging\Log;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 use League\Fractal\Resource\Collection;
 use Yajra\Datatables\Contracts\DataTableEngineContract;
+use Yajra\Datatables\Exception;
 use Yajra\Datatables\Helper;
 use Yajra\Datatables\Processors\DataProcessor;
 
@@ -46,6 +48,11 @@ abstract class BaseEngine implements DataTableEngineContract
     protected $builder;
 
     /**
+     * @var \Illuminate\Contracts\Logging\Log
+     */
+    protected $logger;
+
+    /**
      * Array of result columns/fields.
      *
      * @var array
@@ -58,14 +65,14 @@ abstract class BaseEngine implements DataTableEngineContract
      * @var array
      */
     protected $columnDef = [
-        'index'     => false,
-        'append'    => [],
-        'edit'      => [],
-        'excess'    => ['rn', 'row_num'],
-        'filter'    => [],
-        'order'     => [],
-        'escape'    => '*',
-        'raw'       => ['action'],
+        'index' => false,
+        'append' => [],
+        'edit' => [],
+        'excess' => ['rn', 'row_num'],
+        'filter' => [],
+        'order' => [],
+        'escape' => '*',
+        'raw' => ['action'],
         'blacklist' => ['password', 'remember_token'],
         'whitelist' => '*',
     ];
@@ -125,10 +132,10 @@ abstract class BaseEngine implements DataTableEngineContract
      * @var array
      */
     protected $templates = [
-        'DT_RowId'    => '',
+        'DT_RowId' => '',
         'DT_RowClass' => '',
-        'DT_RowData'  => [],
-        'DT_RowAttr'  => [],
+        'DT_RowData' => [],
+        'DT_RowAttr' => [],
     ];
 
     /**
@@ -244,7 +251,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     public function removeColumn()
     {
-        $names                     = func_get_args();
+        $names = func_get_args();
         $this->columnDef['excess'] = array_merge($this->columnDef['excess'], $names);
 
         return $this;
@@ -307,7 +314,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     public function getQueryBuilder($instance = null)
     {
-        if (! $instance) {
+        if (!$instance) {
             $instance = $this->query;
         }
 
@@ -422,7 +429,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     public function filterColumn($column, $method)
     {
-        $params                             = func_get_args();
+        $params = func_get_args();
         $this->columnDef['filter'][$column] = ['method' => $method, 'parameters' => array_splice($params, 2)];
 
         return $this;
@@ -493,19 +500,37 @@ abstract class BaseEngine implements DataTableEngineContract
      * @param bool $mDataSupport
      * @param bool $orderFirst
      * @return \Illuminate\Http\JsonResponse
+     * @throws \Exception
      */
     public function make($mDataSupport = false, $orderFirst = false)
     {
-        $this->totalRecords = $this->totalCount();
+        try {
+            $this->totalRecords = $this->totalCount();
 
-        if ($this->totalRecords) {
-            $this->orderRecords(! $orderFirst);
-            $this->filterRecords();
-            $this->orderRecords($orderFirst);
-            $this->paginate();
+            if ($this->totalRecords) {
+                $this->orderRecords(!$orderFirst);
+                $this->filterRecords();
+                $this->orderRecords($orderFirst);
+                $this->paginate();
+            }
+
+            return $this->render($mDataSupport);
+        } catch (\Exception $exception) {
+            $error = config('datatables.error');
+            if ($error === 'throw') {
+                throw new Exception($exception->getMessage(), $code = 0, $exception);
+            }
+
+            $this->getLogger()->error($exception);
+
+            return new JsonResponse([
+                'draw' => (int) $this->request->input('draw'),
+                'recordsTotal' => (int) $this->totalRecords,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'error' => $error ? __($error) : "Exception Message:\n\n" . $exception->getMessage(),
+            ]);
         }
-
-        return $this->render($mDataSupport);
     }
 
     /**
@@ -516,7 +541,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     protected function orderRecords($skip)
     {
-        if (! $skip) {
+        if (!$skip) {
             $this->ordering();
         }
     }
@@ -547,7 +572,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     protected function paginate()
     {
-        if ($this->request->isPaginationable() && ! $this->skipPaging) {
+        if ($this->request->isPaginationable() && !$this->skipPaging) {
             $this->paging();
         }
     }
@@ -561,8 +586,8 @@ abstract class BaseEngine implements DataTableEngineContract
     protected function render($object = false)
     {
         $output = array_merge([
-            'draw'            => (int) $this->request->input('draw'),
-            'recordsTotal'    => $this->totalRecords,
+            'draw' => (int) $this->request->input('draw'),
+            'recordsTotal' => $this->totalRecords,
             'recordsFiltered' => $this->filteredRecords,
         ], $this->appends);
 
@@ -576,7 +601,7 @@ abstract class BaseEngine implements DataTableEngineContract
             //Get transformer reflection
             //Firs method parameter should be data/object to transform
             $reflection = new \ReflectionMethod($this->transformer, 'transform');
-            $parameter  = $reflection->getParameters()[0];
+            $parameter = $reflection->getParameters()[0];
 
             //If parameter is class assuming it requires object
             //Else just pass array by default
@@ -589,7 +614,7 @@ abstract class BaseEngine implements DataTableEngineContract
                 );
             }
 
-            $collection     = $fractal->createData($resource)->toArray();
+            $collection = $fractal->createData($resource)->toArray();
             $output['data'] = $collection['data'];
         } else {
             $output['data'] = Helper::transform($this->getProcessedData($object));
@@ -599,7 +624,7 @@ abstract class BaseEngine implements DataTableEngineContract
             $output = $this->showDebugger($output);
         }
 
-        return new JsonResponse($output);
+        return new JsonResponse($output, 200, config('datatables.json.header', []), config('datatables.json.options', 0));
     }
 
     /**
@@ -655,7 +680,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     public function isDebugging()
     {
-        return !! config('app.debug', false);
+        return !!config('app.debug', false);
     }
 
     /**
@@ -667,9 +692,34 @@ abstract class BaseEngine implements DataTableEngineContract
     protected function showDebugger(array $output)
     {
         $output['queries'] = $this->connection->getQueryLog();
-        $output['input']   = $this->request->all();
+        $output['input'] = $this->request->all();
 
         return $output;
+    }
+
+    /**
+     * Get monolog/logger instance.
+     *
+     * @return \Illuminate\Contracts\Logging\Log
+     */
+    public function getLogger()
+    {
+        $this->logger = $this->logger ?: resolve(Log::class);
+
+        return $this->logger;
+    }
+
+    /**
+     * Set monolog/logger instance.
+     *
+     * @param \Illuminate\Contracts\Logging\Log $logger
+     * @return $this
+     */
+    public function setLogger(Log $logger)
+    {
+        $this->logger = $logger;
+
+        return $this;
     }
 
     /**
@@ -679,7 +729,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     public function isCaseInsensitive()
     {
-        return !! config('datatables.search.case_insensitive', false);
+        return !!config('datatables.search.case_insensitive', false);
     }
 
     /**
@@ -729,7 +779,7 @@ abstract class BaseEngine implements DataTableEngineContract
     }
 
     /**
-     * Update list of columns that is not allowed for search/sort.
+     * Update list of columns that is allowed for search/sort.
      *
      * @param  string|array $whitelist
      * @return $this
@@ -830,7 +880,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     public function isSmartSearch()
     {
-        return !! config('datatables.search.smart', true);
+        return !!config('datatables.search.smart', true);
     }
 
     /**
@@ -840,7 +890,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     public function isWildcard()
     {
-        return !! config('datatables.search.use_wildcards', false);
+        return !!config('datatables.search.use_wildcards', false);
     }
 
     /**
@@ -852,7 +902,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     protected function wildcardLikeString($str, $lowercase = true)
     {
-        $wild  = '%';
+        $wild = '%';
         $chars = preg_split('//u', $str, -1, PREG_SPLIT_NO_EMPTY);
 
         if (count($chars) > 0) {
@@ -877,9 +927,9 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     protected function overrideGlobalSearch(callable $callback, $parameters, $autoFilter = false)
     {
-        $this->autoFilter               = $autoFilter;
-        $this->isFilterApplied          = true;
-        $this->filterCallback           = $callback;
+        $this->autoFilter = $autoFilter;
+        $this->isFilterApplied = true;
+        $this->filterCallback = $callback;
         $this->filterCallbackParameters = $parameters;
     }
 
@@ -933,7 +983,7 @@ abstract class BaseEngine implements DataTableEngineContract
      */
     protected function getColumnNameByIndex($index)
     {
-        $name = isset($this->columns[$index]) && $this->columns[$index] <> '*' ? $this->columns[$index] : $this->getPrimaryKeyName();
+        $name = isset($this->columns[$index]) && $this->columns[$index] != '*' ? $this->columns[$index] : $this->getPrimaryKeyName();
 
         return in_array($name, $this->extraColumns, true) ? $this->getPrimaryKeyName() : $name;
     }
@@ -973,7 +1023,7 @@ abstract class BaseEngine implements DataTableEngineContract
     {
         $matches = explode(' as ', Str::lower($str));
 
-        if (! empty($matches)) {
+        if (!empty($matches)) {
             if ($wantsAlias) {
                 return array_pop($matches);
             } else {
@@ -986,5 +1036,19 @@ abstract class BaseEngine implements DataTableEngineContract
         }
 
         return $str;
+    }
+
+    /**
+     * Push a new column name to blacklist
+     *
+     * @return $this
+     */
+    public function pushToBlacklist($column)
+    {
+        if (!$this->isBlacklisted($column)) {
+            array_push($this->columnDef['blacklist'], $column);
+        }
+
+        return $this;
     }
 }
